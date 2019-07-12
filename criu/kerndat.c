@@ -1052,6 +1052,14 @@ static bool kerndat_has_clone3_set_tid(void)
 	return 0;
 }
 
+static int pr_set_dumpable(int value)
+{
+	int ret = prctl(PR_SET_DUMPABLE, value, 0, 0, 0);
+	if (ret < 0)
+		pr_perror("Unable to set PR_SET_DUMPABLE");
+	return ret;
+}
+
 int kerndat_init(void)
 {
 	int ret;
@@ -1066,6 +1074,13 @@ int kerndat_init(void)
 
 	preload_socket_modules();
 	preload_netfilter_modules();
+
+	/*
+	 * When our process has elevated effective capabilities (e.g., with a
+	 * setcap CRIU binary), our process becomes non-dumpable, which can
+	 * make our /proc/self root owned.
+	 */
+	pr_set_dumpable(1);
 
 	if (check_pagemap()) {
 		pr_err("check_pagemap failed when initializing kerndat.\n");
