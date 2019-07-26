@@ -500,10 +500,10 @@ static int kerndat_loginuid(void)
 	 * on that rely dump/restore code.
 	 * See also: marc.info/?l=git-commits-head&m=138509506407067
 	 */
-	if (prepare_loginuid(INVALID_UID, LOG_WARN) < 0)
+	if (prepare_loginuid(INVALID_UID, LOG_INFO) < 0)
 		return 0;
 	/* Cleaning value back as it was */
-	if (prepare_loginuid(saved_loginuid, LOG_WARN) < 0)
+	if (prepare_loginuid(saved_loginuid, LOG_INFO) < 0)
 		return 0;
 
 	kdat.luid = LUID_FULL;
@@ -874,7 +874,7 @@ static void kerndat_save_cache(void)
 		return;
 
 	if (fstatfs(fd, &s) < 0 || s.f_type != TMPFS_MAGIC) {
-		pr_warn("Can't keep kdat cache on non-tempfs\n");
+		pr_info("Can't keep kdat cache on non-tempfs\n");
 		close(fd);
 		goto unl;
 	}

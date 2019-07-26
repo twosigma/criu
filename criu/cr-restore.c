@@ -848,7 +848,7 @@ static int prepare_oom_score_adj(int value)
 	snprintf(buf, 11, "%d", value);
 
 	if (write(fd, buf, 11) < 0) {
-		pr_perror("Write %s to /proc/self/oom_score_adj failed", buf);
+		pr_info("Write %s to /proc/self/oom_score_adj failed: %s", buf, strerror(errno));
 		ret = -1;
 	}
 

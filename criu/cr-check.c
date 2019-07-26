@@ -1423,7 +1423,9 @@ int cr_check(void)
 		ret |= check_compat_cr();
 	}
 
-	print_on_level(DEFAULT_LOGLEVEL, "%s\n", ret ? CHECK_MAYBE : CHECK_GOOD);
+	if (ret)
+		print_on_level(DEFAULT_LOGLEVEL, "%s\n", CHECK_MAYBE);
+
 	return ret;
 }
 #undef CHECK_GOOD

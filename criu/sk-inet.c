@@ -154,7 +154,7 @@ static int can_dump_inet_sk(const struct inet_sk_desc *sk)
 		}
 
 		if (sk->rqlen)
-			pr_warn("Read queue is dropped for socket %x\n",
+			pr_info("Read queue is dropped for socket %x\n",
 					sk->sd.ino);
 
 		return 1;
