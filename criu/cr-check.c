@@ -1433,7 +1433,8 @@ int cr_check(void)
 		ret |= check_compat_cr();
 	}
 
-	pr_msg("%s\n", ret ? CHECK_MAYBE : CHECK_GOOD);
+	if (ret)
+		pr_msg("%s\n", CHECK_MAYBE);
 	return ret;
 }
 #undef CHECK_GOOD

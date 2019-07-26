@@ -355,7 +355,7 @@ int compel_get_task_regs(pid_t pid, user_regs_struct_t *regs,
 			set_user_reg(regs, ip, get_user_reg(regs, ip) - 2);
 			break;
 		case -ERESTART_RESTARTBLOCK:
-			pr_warn("Will restore %d with interrupted system call\n", pid);
+			pr_info("Will restore %d with interrupted system call\n", pid);
 			set_user_reg(regs, ax, -EINTR);
 			break;
 		}
