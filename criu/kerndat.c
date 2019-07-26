@@ -874,7 +874,7 @@ static void kerndat_save_cache(void)
 		return;
 
 	if (fstatfs(fd, &s) < 0 || s.f_type != TMPFS_MAGIC) {
-		pr_warn("Can't keep kdat cache on non-tempfs\n");
+		pr_info("Can't keep kdat cache on non-tempfs\n");
 		close(fd);
 		goto unl;
 	}
