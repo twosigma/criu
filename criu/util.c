@@ -607,6 +607,7 @@ int cr_system_userns(int in, int out, int err, char *cmd,
 
 		execvp(cmd, argv);
 
+		/* XXX Bug: log fd is closed */
 		pr_perror("exec(%s, ...) failed", cmd);
 out_chld:
 		_exit(1);
