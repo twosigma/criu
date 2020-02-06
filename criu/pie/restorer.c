@@ -668,6 +668,7 @@ core_restore_end:
 	return -1;
 }
 
+#ifndef UNPRIVILEGED
 static long restore_self_exe_late(struct task_restore_args *args)
 {
 	int fd = args->fd_exe_link, ret;
@@ -680,6 +681,7 @@ static long restore_self_exe_late(struct task_restore_args *args)
 
 	return ret;
 }
+#endif
 
 #ifndef ARCH_HAS_SHMAT_HOOK
 unsigned long arch_shmat(int shmid, void *shmaddr,
@@ -1725,7 +1727,11 @@ long __export_restore_task(struct task_restore_args *args)
 		.env_end	= args->mm.mm_env_end,
 		.auxv		= (void *)args->mm_saved_auxv,
 		.auxv_size	= args->mm_saved_auxv_size,
+#ifdef UNPRIVILEGED
+		.exe_fd		= -1,
+#else
 		.exe_fd		= args->fd_exe_link,
+#endif
 	};
 	ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
 	if (ret == -EINVAL) {
@@ -1748,7 +1754,9 @@ long __export_restore_task(struct task_restore_args *args)
 		 * after old existing VMAs are superseded with
 		 * new ones from image file.
 		 */
+#ifndef UNPRIVILEGED
 		ret |= restore_self_exe_late(args);
+#endif
 	} else {
 		if (ret)
 			pr_err("sys_prctl(PR_SET_MM, PR_SET_MM_MAP) failed with %d\n", (int)ret);
