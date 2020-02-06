@@ -1259,6 +1259,7 @@ static int kerndat_newifindex_err_cb(int err, struct ns_id *ns, void *arg)
 {
 	switch (err) {
 	case -ENODEV:
+	case -EPERM:
 		kdat.has_newifindex = false;
 		break;
 	case -ERANGE:

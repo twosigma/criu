@@ -1607,10 +1607,12 @@ int collect_namespaces(bool for_dump)
 int prepare_userns_creds(void)
 {
 	/* UID and GID must be set after restoring /proc/PID/{uid,gid}_maps */
+#ifndef UNPRIVILEGED
 	if (setuid(0) || setgid(0) || setgroups(0, NULL)) {
 		pr_perror("Unable to initialize id-s");
 		return -1;
 	}
+#endif
 
 	/*
 	 * This flag is dropped after entering userns, but is

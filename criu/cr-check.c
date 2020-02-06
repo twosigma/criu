@@ -139,7 +139,11 @@ static int check_ns_last_pid(void)
 {
 	int ret;
 
+#ifdef UNPRIVILEGED
+	ret = access("/proc/" LAST_PID_PATH, R_OK);
+#else
 	ret = access("/proc/" LAST_PID_PATH, W_OK);
+#endif
 	if (!ret)
 		return 0;
 
@@ -1323,8 +1327,10 @@ int cr_check(void)
 	struct ns_id *ns;
 	int ret = 0;
 
+#ifndef UNPRIVILEGED
 	if (!is_root_user())
 		return -1;
+#endif
 
 	root_item = alloc_pstree_item();
 	if (root_item == NULL)
@@ -1364,12 +1370,24 @@ int cr_check(void)
 	CHECK_CAT1(check_prctl_cat1());
 	CHECK_CAT1(check_fcntl());
 	CHECK_CAT1(check_proc_stat());
+#ifndef UNPRIVILEGED
 	CHECK_CAT1(check_tcp());
+#else
+	(void)check_tcp; /* avoid unused warnings */
+#endif
 	CHECK_CAT1(check_fdinfo_ext());
 	CHECK_CAT1(check_unaligned_vmsplice());
 	CHECK_CAT1(check_tty());
 	CHECK_CAT1(check_so_gets());
+	 /*
+	  * The Two Sigma core sim doesn't use System V IPC , but if we do, we
+	  * should revisit this.
+	  */
+#ifndef UNPRIVILEGED
 	CHECK_CAT1(check_ipc());
+#else
+	(void)check_ipc;
+#endif
 	CHECK_CAT1(check_sigqueuinfo());
 	CHECK_CAT1(check_ptrace_peeksiginfo());
 	CHECK_CAT1(check_special_mapping_mremap());

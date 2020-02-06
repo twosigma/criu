@@ -1376,7 +1376,11 @@ void rlimit_unlimit_nofile(void)
 	new.rlim_max = kdat.sysctl_nr_open;
 
 	if (prlimit(getpid(), RLIMIT_NOFILE, &new, NULL)) {
+#ifdef UNPRIVILEGED
+		pr_debug("rlimit: Can't setup RLIMIT_NOFILE for self");
+#else
 		pr_perror("rlimit: Can't setup RLIMIT_NOFILE for self");
+#endif
 		return;
 	} else
 		pr_debug("rlimit: RLIMIT_NOFILE unlimited for self\n");

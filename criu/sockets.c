@@ -488,6 +488,13 @@ static int sk_setbufs(void *arg, int fd, pid_t pid)
 {
 	u32 *buf = (u32 *)arg;
 
+#ifdef UNPRIVILEGED
+#undef SO_SNDBUFFORCE
+#define SO_SNDBUFFORCE SO_SNDBUF
+#undef SO_RCVBUFFORCE
+#define SO_RCVBUFFORCE SO_RCVBUF
+#endif
+
 	if (restore_opt(fd, SOL_SOCKET, SO_SNDBUFFORCE, &buf[0]))
 		return -1;
 	if (restore_opt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &buf[1]))
@@ -546,10 +553,12 @@ int restore_socket_opts(int sk, SkOptsEntry *soe)
 		pr_debug("\trestore rcvlowat %d for socket\n", soe->so_rcvlowat);
 		ret |= restore_opt(sk, SOL_SOCKET, SO_RCVLOWAT, &soe->so_rcvlowat);
 	}
+#ifndef UNPRIVILEGED
 	if (soe->has_so_mark) {
 		pr_debug("\trestore mark %d for socket\n", soe->so_mark);
 		ret |= restore_opt(sk, SOL_SOCKET, SO_MARK, &soe->so_mark);
 	}
+#endif
 	if (soe->has_so_passcred && soe->so_passcred) {
 		pr_debug("\tset passcred for socket\n");
 		ret |= restore_opt(sk, SOL_SOCKET, SO_PASSCRED, &val);
