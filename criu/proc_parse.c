@@ -352,7 +352,18 @@ static int vma_get_mapfile_user(const char *fname, struct vma_area *vma,
 		return -1;
 	}
 
+#if 1
+	/*
+	 * For some reason, in the container, the stat of the executable gives
+	 * a different device than the one in /proc/$$/smaps (but inode stay
+	 * the same).
+	 * This is only a problem encountered only with when we don't have
+	 * CAP_SYS_ADMIN as we cannot open map_files (EPERM).
+	 */
+	if (
+#else
 	if (vma->vmst->st_dev != vfi_dev ||
+#endif
 			vma->vmst->st_ino != vfi->ino) {
 		pr_err("Failed to resolve mapping %lx filename\n",
 		       (unsigned long)vma->e->start);
