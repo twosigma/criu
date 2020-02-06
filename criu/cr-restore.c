@@ -2926,11 +2926,15 @@ static int prepare_mm(pid_t pid, struct task_restore_args *args)
 		args->mm_saved_auxv[i] = (auxv_t)mm->mm_saved_auxv[i];
 	}
 
+#ifndef UNPRIVILEGED
 	exe_fd = open_reg_by_id(mm->exe_file_id);
 	if (exe_fd < 0)
 		goto out;
 
 	args->fd_exe_link = exe_fd;
+#else
+	args->fd_exe_link = exe_fd = -1;
+#endif
 
 	args->has_thp_enabled = rsti(current)->has_thp_enabled;
 
