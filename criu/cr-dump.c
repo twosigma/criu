@@ -537,6 +537,10 @@ static int dump_task_mm(pid_t pid, const struct proc_pid_stat *stat,
 	if (get_task_auxv(pid, &mme))
 		goto err;
 
+	/*
+	 * If we checkpoint a restored image, it's going to be the CRIU
+	 * executable. We don't want references of it in our image.
+	 */
 	if (dump_task_exe_link(pid, &mme))
 		goto err;
 

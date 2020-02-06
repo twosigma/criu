@@ -673,8 +673,10 @@ int prepare_mm_pid(struct pstree_item *i)
 	if (ret <= 0)
 		return ret;
 
+#ifndef UNPRIVILEGED
 	if (collect_special_file(ri->mm->exe_file_id) == NULL)
 		return -1;
+#endif
 
 	pr_debug("Found %zd VMAs in image\n", ri->mm->n_vmas);
 	img = NULL;
@@ -821,6 +823,7 @@ void prepare_cow_vmas(void)
 				     * but helpers can (and do) */
 			continue;
 
+#ifndef UNPRIVILEGED
 		if (rsti(pi)->mm->exe_file_id != rsti(ppi)->mm->exe_file_id)
 			/*
 			 * Tasks running different executables have
@@ -828,6 +831,7 @@ void prepare_cow_vmas(void)
 			 * and actually kernel never creates such.
 			 */
 			continue;
+#endif
 
 		prepare_cow_vmas_for(vmas, pvmas);
 	}

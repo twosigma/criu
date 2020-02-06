@@ -189,35 +189,12 @@ static int lsm_set_label(char *label, char *type, int procfd)
 static int restore_creds(struct thread_creds_args *args, int procfd,
 			 int lsm_type)
 {
-#ifdef UNPRIVILEGED
-	/*
-	 * We won't restore any of the credentials.
-	 * If we are running with capabilities, we must drop them.
-	 */
-	/* struct cap_data data; */
-	struct cap_data data[_LINUX_CAPABILITY_U32S_3];
-	struct cap_header hdr = {_LINUX_CAPABILITY_VERSION_3, 0};
-
-	if (sys_capget(&hdr, data) < 0) {
-		pr_err("Unable to get capabilities\n");
-		return -1;
-	}
-
-	for (int i = 0; i < _LINUX_CAPABILITY_U32S_3; i++) {
-		data[i].eff = 0;
-		data[i].prm = 0;
-	}
-
-	if (sys_capset(&hdr, data) < 0) {
-		pr_err("capset issue\n");
-		return -1;
-	}
-#else
 	CredsEntry *ce = &args->creds;
 	int b, i, ret;
 	struct cap_header hdr;
 	struct cap_data data[_LINUX_CAPABILITY_U32S_3];
 
+#ifndef UNPRIVILEGED
 	/*
 	 * We're still root here and thus can do it without failures.
 	 */
@@ -305,6 +282,10 @@ static int restore_creds(struct thread_creds_args *args, int procfd,
 			}
 		}
 	}
+#else
+	(void)b;
+	(void)ce;
+#endif
 
 	/*
 	 * Fifth -- restore caps. Nothing but cap bits are changed
@@ -317,9 +298,20 @@ static int restore_creds(struct thread_creds_args *args, int procfd,
 	BUILD_BUG_ON(_LINUX_CAPABILITY_U32S_3 != CR_CAP_SIZE);
 
 	for (i = 0; i < CR_CAP_SIZE; i++) {
+#ifdef UNPRIVILEGED
+		if (sys_capget(&hdr, data) < 0) {
+			pr_err("Unable to get capabilities\n");
+			return -1;
+		}
+		/* We cannot elevate privileges, only drop them, hence the &= */
+		data[i].eff &= args->cap_eff[i];
+		data[i].prm &= args->cap_prm[i];
+		data[i].inh &= args->cap_inh[i];
+#else
 		data[i].eff = args->cap_eff[i];
 		data[i].prm = args->cap_prm[i];
 		data[i].inh = args->cap_inh[i];
+#endif
 	}
 
 	ret = sys_capset(&hdr, data);
@@ -328,6 +320,7 @@ static int restore_creds(struct thread_creds_args *args, int procfd,
 		return -1;
 	}
 
+#ifndef UNPRIVILEGED
 	if (lsm_type != LSMTYPE__SELINUX) {
 		/*
 		 * SELinux does not support setting the process context for
@@ -342,8 +335,8 @@ static int restore_creds(struct thread_creds_args *args, int procfd,
 	/* Also set the sockcreate label for all threads */
 	if (lsm_set_label(args->lsm_sockcreate, "sockcreate", procfd) < 0)
 		return -1;
-
 #endif
+
 	return 0;
 }
 
@@ -675,6 +668,7 @@ core_restore_end:
 	return -1;
 }
 
+#ifndef UNPRIVILEGED
 static long restore_self_exe_late(struct task_restore_args *args)
 {
 	int fd = args->fd_exe_link, ret;
@@ -687,6 +681,7 @@ static long restore_self_exe_late(struct task_restore_args *args)
 
 	return ret;
 }
+#endif
 
 #ifndef ARCH_HAS_SHMAT_HOOK
 unsigned long arch_shmat(int shmid, void *shmaddr,
@@ -1734,7 +1729,27 @@ long __export_restore_task(struct task_restore_args *args)
 		.auxv_size	= args->mm_saved_auxv_size,
 		.exe_fd		= args->fd_exe_link,
 	};
+
+#ifndef UNPRIVILEGED
 	ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
+#else
+	/*
+	 * We do it in two steps. First without setting the exe_fd, and then
+	 * with. If we do it in the reverse order, it seems to produce an
+	 * -EINVAL for some cases.
+	 */
+	prctl_map.exe_fd = -1;
+	ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
+	if (!ret) {
+		prctl_map.exe_fd = args->fd_exe_link;
+		ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
+		if (ret) {
+			pr_info("Failed to set /proc/self/exe link (ret=%d), proceeding anyways\n", (int)ret);
+		}
+		ret = 0;
+	}
+#endif
+
 	if (ret == -EINVAL) {
 		ret  = sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_CODE,	(long)args->mm.mm_start_code, 0);
 		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_END_CODE,	(long)args->mm.mm_end_code, 0);
@@ -1755,7 +1770,9 @@ long __export_restore_task(struct task_restore_args *args)
 		 * after old existing VMAs are superseded with
 		 * new ones from image file.
 		 */
+#ifndef UNPRIVILEGED
 		ret |= restore_self_exe_late(args);
+#endif
 	} else {
 		if (ret)
 			pr_err("sys_prctl(PR_SET_MM, PR_SET_MM_MAP) failed with %d\n", (int)ret);
