@@ -920,8 +920,13 @@ static int kerndat_uffd(void)
 		if (uffd == -ENOSYS)
 			return 0;
 
+#ifdef UNPRIVILEGED
+		pr_info("Lazy pages are not available\n");
+		return 0;
+#else
 		pr_err("Lazy pages are not available\n");
 		return -1;
+#endif
 	}
 
 	kdat.has_uffd = true;
@@ -1009,10 +1014,12 @@ out_unmap:
 	return ret;
 }
 
+#ifndef UNPRIVILEGED
 static int kerndat_tun_netns(void)
 {
 	return check_tun_netns_cr(&kdat.tun_ns);
 }
+#endif
 
 static bool kerndat_has_clone3_set_tid(void)
 {
@@ -1073,7 +1080,9 @@ int kerndat_init(void)
 	memset(&kdat, 0, sizeof(kdat));
 
 	preload_socket_modules();
+#ifndef UNPRIVILEGED
 	preload_netfilter_modules();
+#endif
 
 	/*
 	 * When our process has elevated effective capabilities (e.g., with a
@@ -1130,6 +1139,7 @@ int kerndat_init(void)
 		pr_err("kerndat_compat_restore failed when initializing kerndat.\n");
 		ret = -1;
 	}
+#ifndef UNPRIVILEGED /* We'd need CAP_NET_ADMIN */
 	if (!ret && kerndat_tun_netns()) {
 		pr_err("kerndat_tun_netns failed when initializing kerndat.\n");
 		ret = -1;
@@ -1146,6 +1156,7 @@ int kerndat_init(void)
 		pr_err("kerndat_link_nsid failed when initializing kerndat.\n");
 		ret = -1;
 	}
+#endif
 	if (!ret && kerndat_has_memfd_create()) {
 		pr_err("kerndat_has_memfd_create failed when initializing kerndat.\n");
 		ret = -1;
@@ -1172,10 +1183,12 @@ int kerndat_init(void)
 		pr_err("kerndat_vdso_preserves_hint failed when initializing kerndat.\n");
 		ret = -1;
 	}
+#ifndef UNPRIVILEGED
 	if (!ret && kerndat_socket_netns()) {
 		pr_err("kerndat_socket_netns failed when initializing kerndat.\n");
 		ret = -1;
 	}
+#endif
 	if (!ret && kerndat_x86_has_ptrace_fpu_xsave_bug()) {
 		pr_err("kerndat_x86_has_ptrace_fpu_xsave_bug failed when initializing kerndat.\n");
 		ret = -1;

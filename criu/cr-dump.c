@@ -738,9 +738,12 @@ static int dump_task_core_all(struct parasite_ctl *ctl,
 	CoreEntry *core = item->core[0];
 	pid_t pid = item->pid->real;
 	int ret = -1;
+
+#ifndef UNPRIVILEGED
 	struct parasite_dump_cgroup_args cgroup_args, *info = NULL;
 
 	BUILD_BUG_ON(sizeof(cgroup_args) < PARASITE_ARG_SIZE_MIN);
+#endif
 
 	pr_info("\n");
 	pr_info("Dumping core (pid: %d)\n", pid);
@@ -770,6 +773,7 @@ static int dump_task_core_all(struct parasite_ctl *ctl,
 	if (ret)
 		goto err;
 
+#ifndef UNPRIVILEGED
 	/* For now, we only need to dump the root task's cgroup ns, because we
 	 * know all the tasks are in the same cgroup namespace because we don't
 	 * allow nesting.
@@ -785,6 +789,7 @@ static int dump_task_core_all(struct parasite_ctl *ctl,
 	ret = dump_task_cgroup(item, &core->tc->cg_set, info);
 	if (ret)
 		goto err;
+#endif
 
 	img = img_from_set(cr_imgset, CR_FD_CORE);
 	ret = pb_write_one(img, core, PB_CORE);
@@ -1818,6 +1823,7 @@ int cr_dump_tasks(pid_t pid)
 	if (vdso_init_dump())
 		goto err;
 
+#ifndef UNPRIVILEGED
 	if (cgp_init(opts.cgroup_props,
 		     opts.cgroup_props ?
 		     strlen(opts.cgroup_props) : 0,
@@ -1826,6 +1832,7 @@ int cr_dump_tasks(pid_t pid)
 
 	if (parse_cg_info())
 		goto err;
+#endif
 
 	if (prepare_inventory(&he))
 		goto err;
@@ -1866,8 +1873,10 @@ int cr_dump_tasks(pid_t pid)
 	if (!glob_imgset)
 		goto err;
 
+#ifndef UNPRIVILEGED
 	if (seccomp_collect_dump_filters() < 0)
 		goto err;
+#endif
 
 	/* Errors handled later in detect_pid_reuse */
 	parent_ie = get_parent_inventory();
@@ -1929,9 +1938,11 @@ int cr_dump_tasks(pid_t pid)
 			goto err;
 	}
 
+#ifndef UNPRIVILEGED
 	ret = dump_cgroups();
 	if (ret)
 		goto err;
+#endif
 
 	ret = fix_external_unix_sockets();
 	if (ret)

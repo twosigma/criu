@@ -104,6 +104,10 @@ export PROTOUFIX DEFINES
 DEFINES			+= -D_FILE_OFFSET_BITS=64
 DEFINES			+= -D_GNU_SOURCE
 
+#
+# Unprivileged (rootless) CRIU
+DEFINES			+= -DUNPRIVILEGED
+
 WARNINGS		:= -Wall -Wformat-security -Wdeclaration-after-statement -Wstrict-prototypes
 
 CFLAGS-GCOV		:= --coverage -fno-exceptions -fno-inline -fprofile-update=atomic

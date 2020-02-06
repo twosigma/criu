@@ -693,10 +693,12 @@ static int tty_set_sid(int fd)
 
 static int tty_set_prgp(int fd, int group)
 {
+#ifndef UNPRIVILEGED
 	if (ioctl(fd, TIOCSPGRP, &group)) {
 		pr_perror("Failed to set group %d on %d", group, fd);
 		return -1;
 	}
+#endif
 	return 0;
 }
 
@@ -828,9 +830,11 @@ static int do_restore_tty_parms(void *arg, int fd, pid_t pid)
 	 * on termios too. Just to be on the safe side.
 	 */
 
+#ifndef UNPRIVILEGED
 	if ((p->has & HAS_TERMIOS_L) &&
 			ioctl(fd, TIOCSLCKTRMIOS, &p->tl) < 0)
 		goto err;
+#endif
 
 	if ((p->has & HAS_TERMIOS) &&
 			ioctl(fd, TCSETS, &p->t) < 0)
@@ -881,6 +885,7 @@ static int restore_tty_params(int fd, struct tty_info *info)
 		winsize_copy(&p.w, info->tie->winsize);
 	}
 
+#ifndef UNPRIVILEGED
 	if (info->tie->has_uid && info->tie->has_gid) {
 		if (fchown(fd, info->tie->uid, info->tie->gid)) {
 			pr_perror("Can't setup uid %d gid %d on %#x",
@@ -890,6 +895,7 @@ static int restore_tty_params(int fd, struct tty_info *info)
 			return -1;
 		}
 	}
+#endif
 
 	return userns_call(do_restore_tty_parms, 0, &p, sizeof(p), fd);
 }

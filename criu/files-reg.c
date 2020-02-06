@@ -316,10 +316,12 @@ static int ghost_apply_metadata(const char *path, GhostFileEntry *gfe)
 	int ret = -1;
 
 	if (S_ISLNK(gfe->mode)) {
+#ifndef UNPRIVILEGED
 		if (lchown(path, gfe->uid, gfe->gid) < 0) {
 			pr_perror("Can't reset user/group on ghost %s", path);
 			goto err;
 		}
+#endif
 
 		/*
 		 * We have no lchmod() function, and fchmod() will fail on
@@ -328,10 +330,12 @@ static int ghost_apply_metadata(const char *path, GhostFileEntry *gfe)
 		 * man 2 fchmodat, but it is not currently implemented. %)
 		 */
 	} else {
+#ifndef UNPRIVILEGED
 		if (chown(path, gfe->uid, gfe->gid) < 0) {
 			pr_perror("Can't reset user/group on ghost %s", path);
 			goto err;
 		}
+#endif
 
 		if (chmod(path, gfe->mode)) {
 			pr_perror("Can't set perms %o on ghost %s", gfe->mode, path);

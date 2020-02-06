@@ -2385,7 +2385,9 @@ skip_ns_bouncing:
 		goto out_kill;
 
 	/* Unlock network before disabling repair mode on sockets */
+#ifndef UNPRIVILEGED
 	network_unlock();
+#endif
 
 	/*
 	 * Stop getting sigchld, after we resume the tasks they

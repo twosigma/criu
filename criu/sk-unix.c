@@ -1388,11 +1388,13 @@ static int restore_file_perms(struct unix_sk_info *ui)
 		memcpy(fname, ui->name, ui->ue->name.len);
 		fname[ui->ue->name.len] = '\0';
 
+#ifndef UNPRIVILEGED
 		if (fchownat(AT_FDCWD, fname, perms->uid, perms->gid, 0) < 0) {
 			int errno_cpy = errno;
 			pr_perror("Unable to change file owner and group");
 			return -errno_cpy;
 		}
+#endif
 
 		if (fchmodat(AT_FDCWD, fname, perms->mode, 0) < 0) {
 			int errno_cpy = errno;

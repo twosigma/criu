@@ -1323,6 +1323,7 @@ out:
 
 static int fchroot(int fd)
 {
+#ifndef UNPRIVILEGED
 	/*
 	 * There's no such thing in syscalls. We can emulate
 	 * it using fchdir()
@@ -1335,6 +1336,9 @@ static int fchroot(int fd)
 
 	pr_debug("Going to chroot into /proc/self/fd/%d\n", fd);
 	return chroot(".");
+#else
+	return 0;
+#endif
 }
 
 int restore_fs(struct pstree_item *me)

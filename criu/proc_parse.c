@@ -1144,6 +1144,7 @@ int parse_pid_status(pid_t pid, struct seize_task_status *ss, void *data)
 			continue;
 		}
 
+#ifndef UNPRIVILEGED
 		if (!strncmp(str, "Seccomp:", 8)) {
 			if (sscanf(str + 9, "%d", &cr->s.seccomp_mode) != 1) {
 				goto err_parse;
@@ -1153,6 +1154,7 @@ int parse_pid_status(pid_t pid, struct seize_task_status *ss, void *data)
 			done++;
 			continue;
 		}
+#endif
 
 		if (!strncmp(str, "ShdPnd:", 7)) {
 			unsigned long long sigpnd;
