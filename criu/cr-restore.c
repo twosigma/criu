@@ -1343,7 +1343,98 @@ static bool needs_prep_creds(struct pstree_item *item)
 	return (!item->parent && ((root_ns_mask & CLONE_NEWUSER) || getuid()));
 }
 
+#ifdef UNPRIVILEGED
+
+struct ns_last_pid_context {
+	int client_fd;
+	struct sockaddr_un serv_addr;
+};
+
+static int init_ns_last_pid_ctx(struct ns_last_pid_context *ctx, const char *socket_path)
+{
+	struct sockaddr_un client_addr;
+	pid_t pid = getpid();
+
+	if (strlen(socket_path)+1 > sizeof(ctx->serv_addr.sun_path)) {
+		pr_err("Socket path too long\n");
+		return -1;
+	}
+
+	ctx->client_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (ctx->client_fd < 0) {
+		pr_perror("Can't create socket");
+		return -1;
+	}
+
+	/*
+	 * The client binds a socket to get replies. It uses the abstract
+	 * namespace (its sun_path[0] is 0), and should be unique.
+	 */
+
+	memset(&client_addr, 0, sizeof(client_addr));
+	client_addr.sun_family = AF_UNIX;
+	memcpy(&client_addr.sun_path[1], "criu", 4);
+	memcpy(&client_addr.sun_path[5], &pid, sizeof(pid));
+
+	if (bind(ctx->client_fd, (struct sockaddr *)&client_addr, sizeof(client_addr)) < 0) {
+		pr_perror("Can't bind socket");
+		return -1;
+	}
+
+
+	memset(&ctx->serv_addr, 0, sizeof(ctx->serv_addr));
+	ctx->serv_addr.sun_family = AF_UNIX;
+	strcpy(ctx->serv_addr.sun_path, socket_path);
+
+	return 0;
+}
+
+static void fini_ns_last_pid_ctx(struct ns_last_pid_context *ctx)
+{
+	close(ctx->client_fd);
+}
+
+static int set_ns_last_pid(struct ns_last_pid_context *ctx, pid_t pid)
+{
+	char r;
+
+	if (sendto(ctx->client_fd, (uint32_t *)&pid, sizeof(uint32_t), 0,
+		   (struct sockaddr *)&ctx->serv_addr, sizeof(ctx->serv_addr)) != sizeof(uint32_t)) {
+		pr_perror("Can't send on ns_last_pid socket");
+		return -1;
+	}
+
+	if (recvfrom(ctx->client_fd, &r, sizeof(r), 0, NULL, NULL) != 1) {
+		pr_perror("Can't receive on ns_last_pid socket");
+		return -1;
+	}
+
+	if (r) {
+		pr_err("ns_last_pid server replied with a failure\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int set_next_pid(void *arg)
+{
+	pid_t *pid = arg;
+	struct ns_last_pid_context last_pid_ctx;
+	int ret;
+
+	if (init_ns_last_pid_ctx(&last_pid_ctx, NS_LAST_PID_SOCKET_PATH))
+		return -1;
+
+	ret = set_ns_last_pid(&last_pid_ctx, *pid - 1);
+	fini_ns_last_pid_ctx(&last_pid_ctx);
+
+	return ret;
+}
+
+#else /* UNPRIVILEGED */
+
+static int set_next_pid(pid_t pid)
 {
 	char buf[32];
 	pid_t *pid = arg;
@@ -1364,6 +1455,8 @@ static int set_next_pid(void *arg)
 	close(fd);
 	return 0;
 }
+
+#endif /* UNPRIVILEGED */
 
 static inline int fork_with_pid(struct pstree_item *item)
 {
