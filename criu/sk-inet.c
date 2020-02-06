@@ -580,6 +580,12 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 
 	switch (proto) {
 	case IPPROTO_TCP:
+#ifdef UNPRIVILEGED
+		if (opts.tcp_close) {
+			err = 0;
+			break;
+		}
+#endif
 		err = (type != SOCK_RAW) ? dump_one_tcp(lfd, sk, &skopts) : 0;
 		if (sk->shutdown)
 			sk_encode_shutdown(&ie, sk->shutdown);

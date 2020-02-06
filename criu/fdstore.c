@@ -18,6 +18,13 @@ static struct fdstore_desc {
 	mutex_t lock; /* to protect a peek offset */
 } *desc;
 
+#ifdef UNPRIVILEGED
+#undef SO_SNDBUFFORCE
+#define SO_SNDBUFFORCE SO_SNDBUF
+#undef SO_RCVBUFFORCE
+#define SO_RCVBUFFORCE SO_RCVBUF
+#endif
+
 int fdstore_init(void)
 {
 	/* In kernel a bufsize has type int and a value is doubled. */

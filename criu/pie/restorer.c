@@ -189,6 +189,30 @@ static int lsm_set_label(char *label, char *type, int procfd)
 static int restore_creds(struct thread_creds_args *args, int procfd,
 			 int lsm_type)
 {
+#ifdef UNPRIVILEGED
+	/*
+	 * We won't restore any of the credentials.
+	 * If we are running with capabilities, we must drop them.
+	 */
+	/* struct cap_data data; */
+	struct cap_data data[_LINUX_CAPABILITY_U32S_3];
+	struct cap_header hdr = {_LINUX_CAPABILITY_VERSION_3, 0};
+
+	if (sys_capget(&hdr, data) < 0) {
+		pr_err("Unable to get capabilities\n");
+		return -1;
+	}
+
+	for (int i = 0; i < _LINUX_CAPABILITY_U32S_3; i++) {
+		data[i].eff = 0;
+		data[i].prm = 0;
+	}
+
+	if (sys_capset(&hdr, data) < 0) {
+		pr_err("capset issue\n");
+		return -1;
+	}
+#else
 	CredsEntry *ce = &args->creds;
 	int b, i, ret;
 	struct cap_header hdr;
@@ -319,6 +343,7 @@ static int restore_creds(struct thread_creds_args *args, int procfd,
 	if (lsm_set_label(args->lsm_sockcreate, "sockcreate", procfd) < 0)
 		return -1;
 
+#endif
 	return 0;
 }
 
@@ -874,8 +899,10 @@ static void rst_tcp_repair_off(struct rst_tcp_sock *rts)
 	int aux, ret;
 
 	aux = rts->reuseaddr;
+#ifndef UNPRIVILEGED
 	pr_debug("pie: Turning repair off for %d (reuse %d)\n", rts->sk, aux);
 	tcp_repair_off(rts->sk);
+#endif
 
 	ret = sys_setsockopt(rts->sk, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
 	if (ret < 0)
