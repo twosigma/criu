@@ -50,6 +50,10 @@
 #include "shmem.h"
 #include "restorer.h"
 
+#ifdef UNPRIVILEGED
+#include <sys/un.h>
+#endif
+
 #ifndef PR_SET_PDEATHSIG
 #define PR_SET_PDEATHSIG 1
 #endif
@@ -1409,6 +1413,92 @@ int cleanup_current_inotify_events(struct task_restore_args *task_args)
 	return 0;
 }
 
+#ifdef UNPRIVILEGED
+struct ns_last_pid_context {
+	int client_fd;
+	struct sockaddr_un serv_addr;
+};
+
+size_t strlen(const char * str)
+{
+	const char *s;
+	for (s = str; *s; ++s) {}
+	return (s - str);
+}
+
+static int init_ns_last_pid_ctx(struct ns_last_pid_context *ctx, const char *socket_path)
+{
+	struct sockaddr_un client_addr;
+	pid_t pid;
+	long ret;
+
+	if (strlen(socket_path)+1 > sizeof(ctx->serv_addr.sun_path)) {
+		pr_err("Socket path too long\n");
+		return -1;
+	}
+
+	ctx->client_fd = sys_socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (ctx->client_fd < 0) {
+		pr_err("Can't create socket %d\n", ctx->client_fd);
+		return -1;
+	}
+
+	/*
+	 * The client binds a socket to get replies. It uses the abstract
+	 * namespace (its sun_path[0] is 0), and should be unique.
+	 */
+
+	pid = sys_getpid();
+	memset(&client_addr, 0, sizeof(client_addr));
+	client_addr.sun_family = AF_UNIX;
+	memcpy(&client_addr.sun_path[1], "criu", 4);
+	memcpy(&client_addr.sun_path[5], &pid, sizeof(pid));
+
+	ret = sys_bind(ctx->client_fd, (struct sockaddr *)&client_addr, sizeof(client_addr));
+	if (ret < 0) {
+		pr_err("Can't bind socket %ld size \n", ret);
+		return -1;
+	}
+
+	memset(&ctx->serv_addr, 0, sizeof(ctx->serv_addr));
+	ctx->serv_addr.sun_family = AF_UNIX;
+	memcpy(ctx->serv_addr.sun_path, socket_path, strlen(socket_path)+1);
+
+	return 0;
+}
+
+static void fini_ns_last_pid_ctx(struct ns_last_pid_context *ctx)
+{
+	sys_close(ctx->client_fd);
+}
+
+static int set_ns_last_pid(struct ns_last_pid_context *ctx, pid_t pid)
+{
+	long ret;
+	char r;
+
+	ret = sys_sendto(ctx->client_fd, (uint32_t *)&pid, sizeof(uint32_t), 0,
+			 (struct sockaddr *)&ctx->serv_addr, sizeof(ctx->serv_addr));
+	if (ret != sizeof(uint32_t)) {
+		pr_err("Can't send on ns_last_pid socket %ld\n", ret);
+		return -1;
+	}
+
+	ret = sys_recvfrom(ctx->client_fd, &r, sizeof(r), 0, NULL, NULL);
+	if (ret != 1) {
+		pr_err("Can't receive on ns_last_pid socket %ld\n", ret);
+		return -1;
+	}
+
+	if (r) {
+		pr_err("ns_last_pid server replied with a failure\n");
+		return -1;
+	}
+
+	return 0;
+}
+#endif
+
 /*
  * The main routine to restore task via sigreturn.
  * This one is very special, we never return there
@@ -1812,15 +1902,30 @@ long __export_restore_task(struct task_restore_args *args)
 		long parent_tid;
 		int i, fd = -1;
 
+#ifdef UNPRIVILEGED
+		struct ns_last_pid_context last_pid_ctx;
+#endif
+
 		if (!args->has_clone3_set_tid) {
 			/* One level pid ns hierarhy */
+#ifdef UNPRIVILEGED
+			fd = sys_openat(args->proc_fd, LAST_PID_PATH, O_RDONLY, 0);
+#else
 			fd = sys_openat(args->proc_fd, LAST_PID_PATH, O_RDWR, 0);
+#endif
 			if (fd < 0) {
 				pr_err("can't open last pid fd %d\n", fd);
 				goto core_restore_end;
 			}
-
 		}
+
+#ifdef UNPRIVILEGED
+		if (init_ns_last_pid_ctx(&last_pid_ctx, NS_LAST_PID_SOCKET_PATH)) {
+			sys_close(fd);
+			goto core_restore_end;
+		}
+#endif
+
 		mutex_lock(&task_entries_local->last_pid_mutex);
 
 		for (i = 0; i < args->nr_threads; i++) {
@@ -1845,12 +1950,27 @@ long __export_restore_task(struct task_restore_args *args)
 				pr_debug("Using clone3 to restore the process\n");
 				RUN_CLONE3_RESTORE_FN(ret, c_args, sizeof(c_args), &thread_args[i], args->clone_restore_fn);
 			} else {
+#ifdef UNPRIVILEGED
+				char current_last_pid_buf[16];
+#endif
 				last_pid_len = std_vprint_num(last_pid_buf, sizeof(last_pid_buf), thread_args[i].pid - 1, &s);
 				sys_lseek(fd, 0, SEEK_SET);
+#ifdef UNPRIVILEGED
+				ret = sys_read(fd, current_last_pid_buf, sizeof(current_last_pid_buf));
+				/* Remove new line */
+				if (ret > 0 && current_last_pid_buf[ret-1] == '\n')
+					ret--;
+				if (!(ret > 0 && ret == last_pid_len && !memcmp(current_last_pid_buf, s, ret)))
+					ret = set_ns_last_pid(&last_pid_ctx, thread_args[i].pid - 1);
+#else
 				ret = sys_write(fd, s, last_pid_len);
+#endif
 				if (ret < 0) {
 					pr_err("Can't set last_pid %ld/%s\n", ret, s);
 					sys_close(fd);
+#ifdef UNPRIVILEGED
+					fini_ns_last_pid_ctx(&last_pid_ctx);
+#endif
 					mutex_unlock(&task_entries_local->last_pid_mutex);
 					goto core_restore_end;
 				}
@@ -1873,6 +1993,9 @@ long __export_restore_task(struct task_restore_args *args)
 		mutex_unlock(&task_entries_local->last_pid_mutex);
 		if (fd >= 0)
 			sys_close(fd);
+#ifdef UNPRIVILEGED
+		fini_ns_last_pid_ctx(&last_pid_ctx);
+#endif
 	}
 
 	restore_rlims(args);

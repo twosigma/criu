@@ -1026,7 +1026,7 @@ static bool kerndat_has_clone3_set_tid(void)
 	pid_t pid;
 	struct _clone_args args = {};
 
-#if defined(CONFIG_MIPS)
+#if defined(CONFIG_MIPS) || defined(UNPRIVILEGED)
 	/*
 	 * Currently the CRIU PIE assembler clone3() wrapper is
 	 * not implemented for MIPS.
