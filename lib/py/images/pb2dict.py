@@ -254,12 +254,11 @@ def decode_base64(value):
 
 
 def encode_unix(value):
-    return quopri.encodestring(value)
+    return quopri.encodestring(value).decode('utf8')
 
 
 def decode_unix(value):
-    return quopri.decodestring(value)
-
+    return quopri.decodestring(value.encode('utf'))
 
 encode = {'unix_name': encode_unix}
 decode = {'unix_name': decode_unix}
