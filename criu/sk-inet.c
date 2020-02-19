@@ -866,6 +866,21 @@ static int open_inet_sk(struct file_desc *d, int *new_fd)
 		goto done;
 	}
 
+	/*
+	 * Close established UDP sockets (but not UDP listening sockets).
+	 * The state of a UDP listening socket is TCP_CLOSE, surprisingly.
+	 */
+	if (opts.tcp_close &&
+	    (ie->proto == IPPROTO_UDP || ie->proto == IPPROTO_UDPLITE) &&
+	    ie->state != TCP_CLOSE) {
+		/*
+		 * shutdown() will fail with "Transport endpoint is not connected",
+		 * but not doing so will make the socket block on recvfrom().
+		 */
+		shutdown(sk, SHUT_RDWR);
+		goto done;
+	}
+
 	if (ie->src_port) {
 		if (inet_bind(sk, ii))
 			goto err;
