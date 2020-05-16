@@ -624,7 +624,7 @@ struct special_mapping {
 static int parse_special_maps(struct special_mapping *vmas, size_t nr)
 {
 	FILE *maps;
-	char buf[256];
+	char buf[10000];
 	int ret = 0;
 
 	maps = fopen_proc(PROC_SELF, "maps");
