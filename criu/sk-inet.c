@@ -883,7 +883,10 @@ static int open_inet_sk(struct file_desc *d, int *new_fd)
 		goto err;
 
 	if (tcp_connection(ie)) {
-		if (!opts.tcp_established_ok && !opts.tcp_close) {
+		if (opts.tcp_close)
+			goto done;
+
+		if (!opts.tcp_established_ok) {
 			pr_err("Connected TCP socket in image\n");
 			goto err;
 		}
