@@ -599,6 +599,32 @@ static void noinline rst_sigreturn(unsigned long new_sp,
 	ARCH_RT_SIGRETURN(new_sp, sigframe);
 }
 
+static void warn_desired_pid_taken(pid_t pid)
+{
+	char buf[1024];
+	ssize_t len;
+	int fd;
+
+	std_sprintf(buf, "/proc/%d/cmdline", pid);
+	fd = sys_open(buf, O_RDONLY, 0);
+	if (fd < 0) {
+		/* The pid is actually not taken, moving on */
+		pr_err("pid=%d is not occupied or unreachable\n", pid);
+		return;
+	}
+
+	len = sys_read(fd, buf, sizeof(buf)-1);
+	sys_close(fd);
+
+	if (len < 0) {
+		pr_err("Unable to report the cmdline of pid=%d\n", pid);
+		return;
+	}
+
+	buf[len] = 0; /* Zero-terminate the string */
+	pr_err("Desired pid=%d is taken by %s\n", pid, buf);
+}
+
 /*
  * Threads restoration via sigreturn. Note it's locked
  * routine and calls for unlock at the end.
@@ -613,6 +639,7 @@ long __export_restore_thread(struct thread_restore_args *args)
 
 	if (my_pid != args->pid) {
 		pr_err("Thread pid mismatch %d/%d\n", my_pid, args->pid);
+		warn_desired_pid_taken(args->pid);
 		goto core_restore_end;
 	}
 
