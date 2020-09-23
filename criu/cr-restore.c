@@ -1875,6 +1875,32 @@ static int create_children_and_session(void)
 	return 0;
 }
 
+static void warn_desired_pid_taken(pid_t pid)
+{
+	char buf[1024];
+	ssize_t len;
+	int fd;
+
+	sprintf(buf, "/proc/%d/cmdline", pid);
+	fd = open(buf, O_RDONLY);
+	if (fd < 0) {
+		/* The pid is actually not taken, moving on */
+		pr_perror("pid=%d is not occupied or unreachable", pid);
+		return;
+	}
+
+	len = read(fd, buf, sizeof(buf)-1);
+	close(fd);
+
+	if (len < 0) {
+		pr_perror("Unable to report the cmdline of pid=%d", pid);
+		return;
+	}
+
+	buf[len] = 0; /* Zero-terminate the string */
+	pr_err("Desired pid=%d is taken by %s\n", pid, buf);
+}
+
 static int restore_task_with_children(void *_arg)
 {
 	struct cr_clone_arg *ca = _arg;
@@ -1907,6 +1933,7 @@ static int restore_task_with_children(void *_arg)
 	pid = getpid();
 	if (vpid(current) != pid) {
 		pr_err("Pid %d do not match expected %d\n", pid, vpid(current));
+		warn_desired_pid_taken(vpid(current));
 		set_task_cr_err(EEXIST);
 		goto err;
 	}
