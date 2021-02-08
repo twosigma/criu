@@ -1954,6 +1954,7 @@ static int restore_task_with_children(void *_arg)
 			}
 		}
 
+#ifndef UNPRIVILEGED
 		if (root_ns_mask & CLONE_NEWTIME) {
 			if (prepare_timens(current->ids->time_ns_id))
 				goto err;
@@ -1961,6 +1962,7 @@ static int restore_task_with_children(void *_arg)
 			if (prepare_timens(0))
 				goto err;
 		}
+#endif
 
 		/* Wait prepare_userns */
 		if (restore_finish_ns_stage(CR_STATE_ROOT_TASK, CR_STATE_PREPARE_NAMESPACES) < 0)
