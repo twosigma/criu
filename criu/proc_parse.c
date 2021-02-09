@@ -1070,6 +1070,7 @@ int parse_pid_status(pid_t pid, struct seize_task_status *ss, void *data)
 
 	cr->s.sigpnd = 0;
 	cr->s.shdpnd = 0;
+	cr->s.seccomp_mode = SECCOMP_MODE_DISABLED;
 
 	if (bfdopenr(&f))
 		return -1;
