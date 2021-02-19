@@ -298,7 +298,7 @@ int setup_tcp_client(char *hostname);
 #define PID_MAX_PATH		"sys/kernel/pid_max"
 
 #ifdef UNPRIVILEGED
-#define NS_LAST_PID_SOCKET_PATH "/var/fastfreeze/run/set_ns_last_pid.sock"
+#define NS_LAST_PID_SOCKET_PATH "/var/tmp/fastfreeze/run/set_ns_last_pid.sock"
 #endif
 
 #define block_sigmask(saved_mask, sig_mask)	({					\
