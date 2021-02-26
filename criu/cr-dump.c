@@ -1355,9 +1355,12 @@ static int dump_one_task(struct pstree_item *item, InventoryEntry *parent_ie)
 		item->sid, item->pgid, vpid(item));
 
 	if (item->sid == 0) {
-		pr_err("A session leader of %d(%d) is outside of its pid namespace\n",
+		/*
+		 * It's okay to not locate the session leader. We'll inherit
+		 * one during restore.
+		 */
+		pr_info("A session leader of %d(%d) is outside of its pid namespace\n",
 			item->pid->real, vpid(item));
-		goto err_cure;
 	}
 
 	cr_imgset = cr_task_imgset_open(vpid(item), O_DUMP);

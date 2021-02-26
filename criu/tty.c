@@ -765,7 +765,7 @@ static bool __tty_is_master(struct tty_driver *driver)
 			return true;
 		break;
 	case TTY_TYPE__EXT_TTY:
-		return true;
+		return !opts.shell_job;
 	}
 
 	return false;
@@ -1158,6 +1158,36 @@ err:
 	return -1;
 }
 
+static bool tree_has_pid(pid_t pid)
+{
+	struct pstree_item *item;
+
+	for_each_pstree_item(item) {
+		if (vpid(item) == pid)
+			return true;
+	}
+
+	return false;
+}
+
+static int restore_ext_tty_pgrp(int fd, struct tty_info *info)
+{
+	pid_t pgrp = info->tie->pgrp;
+
+	/* pgrp was external to the pid namespace of the app */
+	if (!pgrp)
+		return 0;
+
+	/*
+	 * pgrp was in the same pid namespace, but outside of the application
+	 * process tree.
+	 */
+	if (!tree_has_pid(pgrp))
+		return 0;
+
+	return tty_set_prgp(fd, pgrp);
+}
+
 static int open_ext_tty(struct tty_info *info)
 {
 	int fd = -1;
@@ -1166,6 +1196,11 @@ static int open_ext_tty(struct tty_info *info)
 		return -1;
 
 	if (restore_tty_params(fd, info)) {
+		close(fd);
+		return -1;
+	}
+
+	if (restore_ext_tty_pgrp(fd, info)) {
 		close(fd);
 		return -1;
 	}
@@ -2295,45 +2330,8 @@ static int tty_dump_queued_data(void)
 	return ret;
 }
 
-static int tty_verify_ctty(void)
-{
-	struct tty_dump_info *d, *p;
-
-	list_for_each_entry(d, &all_ttys, list) {
-		struct tty_dump_info *n = NULL;
-
-		if (d->driver->type != TTY_TYPE__CTTY)
-			continue;
-
-		list_for_each_entry(p, &all_ttys, list) {
-			if (!is_pty(p->driver)	||
-			    p->sid != d->sid	||
-			    p->pgrp != d->sid)
-				continue;
-			n = p;
-			break;
-		}
-
-		if (!n) {
-			pr_err("ctty inheritance detected sid/pgrp %d, "
-			       "no PTY peer with sid/pgrp needed\n",
-			       d->sid);
-			return -ENOENT;
-		} else if (n->pid_real != d->pid_real) {
-			pr_err("ctty inheritance detected sid/pgrp %d "
-			       "(ctty pid_real %d pty pid_real %d)\n",
-			       d->sid, d->pid_real, n->pid_real);
-			return -ENOENT;
-		}
-	}
-
-	return 0;
-}
-
 int tty_post_actions(void)
 {
-	if (tty_verify_ctty())
-		return -1;
 	if (tty_verify_active_pairs())
 		return -1;
 	else if (tty_dump_queued_data())
