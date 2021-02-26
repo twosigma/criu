@@ -693,12 +693,10 @@ static int tty_set_sid(int fd)
 
 static int tty_set_prgp(int fd, int group)
 {
-#ifndef UNPRIVILEGED
 	if (ioctl(fd, TIOCSPGRP, &group)) {
 		pr_perror("Failed to set group %d on %d", group, fd);
 		return -1;
 	}
-#endif
 	return 0;
 }
 

@@ -375,7 +375,9 @@ static inline int restore_pdeath_sig(struct thread_restore_args *ta)
 
 static int restore_dumpable_flag(MmEntry *mme)
 {
+#ifndef UNPRIVILEGED
 	int current_dumpable;
+#endif
 	int ret;
 
 	if (!mme->has_dumpable) {
@@ -392,6 +394,10 @@ static int restore_dumpable_flag(MmEntry *mme)
 		return 0;
 	}
 
+	// When /proc/sys/fs/suid_dumpable is set to 2, current_dumpable would
+	// be equal to 2, and CRIU falls back to setting dumpable to 0. This
+	// is not desirable.
+#ifndef UNPRIVILEGED
 	/*
 	 * If dumpable flag is present but it is not 0 or 1, then we can not
 	 * use prctl to set it back.  Try to see if it is already correct
@@ -410,6 +416,7 @@ static int restore_dumpable_flag(MmEntry *mme)
 			return -1;
 		}
 	}
+#endif
 	return 0;
 }
 
