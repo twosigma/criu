@@ -269,7 +269,6 @@ static int dump_one_reg_file_cond(int lfd, u32 *id, struct fd_parms *parms)
 	return 0;
 }
 
-#ifndef UNPRIVILEGED
 static int dump_task_exe_link(pid_t pid, MmEntry *mm)
 {
 	struct fd_parms params;
@@ -287,7 +286,6 @@ static int dump_task_exe_link(pid_t pid, MmEntry *mm)
 	close(fd);
 	return ret;
 }
-#endif
 
 static int dump_task_fs(pid_t pid, struct parasite_dump_misc *misc, struct cr_imgset *imgset)
 {
@@ -537,14 +535,12 @@ static int dump_task_mm(pid_t pid, const struct proc_pid_stat *stat,
 	if (get_task_auxv(pid, &mme))
 		goto err;
 
-#ifndef UNPRIVILEGED
 	/*
 	 * If we checkpoint a restored image, it's going to be the CRIU
 	 * executable. We don't want references of it in our image.
 	 */
 	if (dump_task_exe_link(pid, &mme))
 		goto err;
-#endif
 
 	ret = pb_write_one(img_from_set(imgset, CR_FD_MM), &mme, PB_MM);
 	xfree(mme.mm_saved_auxv);
