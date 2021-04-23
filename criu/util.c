@@ -626,7 +626,12 @@ int cr_system_userns(int in, int out, int err, char *cmd,
 
 		execvp(cmd, argv);
 
-		pr_perror("exec(%s, ...) failed", cmd);
+		/*
+		 * pr_error() doesn't work as the log file fd is closed.
+		 * Luckily, pr_msg() outputs on stderr, which is not closed.
+		 */
+		pr_msg("Error (%s:%d): " LOG_PREFIX "execvp(\"%s\", ...) failed: %s\n",
+		       __FILE__, __LINE__, cmd, strerror(errno));
 out_chld:
 		_exit(1);
 	}
