@@ -334,6 +334,64 @@ static int corrupt_extregs(pid_t pid)
 	return 0;
 }
 
+
+/*
+ * The following system calls are special. The kernel carries additional context for
+ * restarting them after an interruption:
+ * - futex_wait() and futex_wait_requeue_pi()
+ * - nanosleep() and clock_nanosleep()
+ * - poll()
+ * This additional context typically carries an adjusted timeout value that
+ * takes in account the time that has passed already.
+ *
+ * Ideally, we would want to checkpoint/restore the values that the kernel
+ * stashes in its `current->restart_block` (see include/linux/restart_block.h),
+ * but we don't have access to these values. This could be a useful kernel
+ * patch to submit at some point.
+ *
+ * For now, we just do what we can with fixing nanosleep().
+ */
+void try_emulate_restartblock(pid_t pid, user_regs_struct_t *regs)
+{
+	if (IS_REG_SYSCALL(regs, nanosleep)) {
+		/* void nanosleep(struct timespec *request, struct timespec *remain) */
+
+		/* `remain`, if not NULL, contains the time that remains to be slept for. */
+		unsigned long remain = get_syscall_arg(regs, 2);
+		if (remain != 0) {
+			set_syscall_arg(regs, 1, remain);
+			goto restart_sys;
+		}
+	} else if (IS_REG_SYSCALL(regs, clock_nanosleep)) {
+		/*
+		 * void clock_nanosleep(clockid_t clk_id, int flags,
+		 *                      struct timespec *request, struct timespec *remain)
+		 */
+
+		/*
+		 * No need to check whether flags was not TIMER_ABSTIME
+		 * because in this case, the kernel returns ERESTARTNOHAND,
+		 * not ERESTART_RESTARTBLOCK.
+		 */
+		unsigned long remain = get_syscall_arg(regs, 4);
+		if (remain != 0) {
+			set_syscall_arg(regs, 3, remain);
+			goto restart_sys;
+		}
+	}
+
+	pr_info("Forcing syscall interruption (nr=%ld) for pid=%d. "
+		"This means that this call is ending prematurely and the application "
+		"might call it again without adjusting the timeout values\n",
+		REG_SYSCALL_NR(*regs), pid);
+	set_user_reg(regs, ax, -EINTR);
+	return;
+
+restart_sys:
+	set_user_reg(regs, ax, get_user_reg(regs, orig_ax));
+	set_user_reg(regs, ip, get_user_reg(regs, ip) - 2);
+}
+
 int compel_get_task_regs(pid_t pid, user_regs_struct_t *regs,
 		  user_fpregs_struct_t *ext_regs, save_regs_t save,
 		  void *arg, unsigned long flags)
@@ -355,8 +413,7 @@ int compel_get_task_regs(pid_t pid, user_regs_struct_t *regs,
 			set_user_reg(regs, ip, get_user_reg(regs, ip) - 2);
 			break;
 		case -ERESTART_RESTARTBLOCK:
-			pr_info("Will restore %d with interrupted system call\n", pid);
-			set_user_reg(regs, ax, -EINTR);
+			try_emulate_restartblock(pid, regs);
 			break;
 		}
 	}

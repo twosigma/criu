@@ -113,6 +113,33 @@ static inline bool user_regs_native(user_regs_struct_t *pregs)
 	 ((pregs)->native.name = (val))		:	\
 	 ((pregs)->compat.name = (val)))
 
+#define REG_ARG1_NATIVE	di
+#define REG_ARG2_NATIVE	si
+#define REG_ARG3_NATIVE	dx
+#define REG_ARG4_NATIVE	r10
+#define REG_ARG5_NATIVE	r8
+#define REG_ARG6_NATIVE	r9
+
+#define REG_ARG1_COMPAT	bx
+#define REG_ARG2_COMPAT	cx
+#define REG_ARG3_COMPAT	dx
+#define REG_ARG4_COMPAT	si
+#define REG_ARG5_COMPAT	di
+#define REG_ARG6_COMPAT	bp
+
+#define REG_ARG_NATIVE(pregs, n)	pregs->native.REG_ARG##n##_NATIVE
+#define REG_ARG_COMPAT(pregs, n)	pregs->compat.REG_ARG##n##_COMPAT
+
+#define get_syscall_arg(pregs, n)	\
+	(user_regs_native(pregs) ? REG_ARG_NATIVE(pregs, n) : REG_ARG_COMPAT(pregs, n))
+
+#define set_syscall_arg(pregs, n, val) ({	\
+	if (user_regs_native(pregs)) {		\
+		REG_ARG_NATIVE(pregs, n) = val;	\
+	} else {				\
+		REG_ARG_COMPAT(pregs, n) = val;	\
+	}})
+
 #if 0
 typedef struct {
 	unsigned short	cwd;
@@ -138,6 +165,11 @@ typedef struct xsave_struct user_fpregs_struct_t;
 #define REG_SYSCALL_NR(regs)	get_user_reg(&regs, orig_ax)
 
 #define __NR(syscall, compat)	((compat) ? __NR32_##syscall : __NR_##syscall)
+
+#define IS_REG_SYSCALL(pregs, syscall)				\
+	(user_regs_native(pregs)			?	\
+	 (pregs)->native.orig_ax == __NR_##syscall	:	\
+	 (pregs)->compat.orig_ax == __NR32_##syscall)
 
 /*
  * For x86_32 __NR_mmap inside the kernel represents old_mmap system
